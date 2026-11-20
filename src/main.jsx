@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Briefcase,
@@ -54,6 +54,7 @@ const initialResignation = {
   lastDay: '',
   notice: '',
   reason: '',
+  signature: '',
 }
 
 const initialOfferLetter = {
@@ -69,6 +70,7 @@ const initialOfferLetter = {
   intro: '',
   body: '',
   closing: '',
+  signature: '',
 }
 
 const exampleResume = {
@@ -478,11 +480,13 @@ function App() {
       ? [
           { id: 'sec-offer-letter-info', label: 'Maklumat surat', icon: Info },
           { id: 'sec-offer-letter-content', label: 'Isi kandungan', icon: MessageSquareText },
+          { id: 'sec-offer-letter-signature', label: 'Tandatangan', icon: FilePenLine },
           { id: 'design', label: 'Gaya surat', icon: Palette },
         ]
       : [
         { id: 'sec-info', label: 'Maklumat surat', icon: Info },
         { id: 'sec-reason', label: 'Alasan ringkas', icon: MessageSquareText },
+        { id: 'sec-signature', label: 'Tandatangan', icon: FilePenLine },
         { id: 'design', label: 'Gaya surat', icon: Palette },
       ]
 
@@ -612,6 +616,71 @@ function Field({ label, value, onChange, type = 'text', min, max }) {
   return <label className="field"><span>{label}</span><input type={type} min={min} max={max} value={value} onChange={(event) => onChange(event.target.value)} /></label>
 }
 
+function SignatureField({ value, onChange }) {
+  const canvasRef = useRef(null)
+  const drawing = useRef(false)
+  const hasDrawn = useRef(false)
+
+  const getPosition = (event, canvas) => {
+    const bounds = canvas.getBoundingClientRect()
+    return {
+      x: (event.clientX - bounds.left) * (canvas.width / bounds.width),
+      y: (event.clientY - bounds.top) * (canvas.height / bounds.height),
+    }
+  }
+
+  const startDrawing = (event) => {
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    if (!context) return
+    event.preventDefault()
+    canvas.setPointerCapture(event.pointerId)
+    drawing.current = true
+    const { x, y } = getPosition(event, canvas)
+    context.beginPath()
+    context.moveTo(x, y)
+    context.strokeStyle = '#202124'
+    context.lineWidth = 3
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+  }
+
+  const draw = (event) => {
+    if (!drawing.current) return
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    if (!context) return
+    const { x, y } = getPosition(event, canvas)
+    context.lineTo(x, y)
+    context.stroke()
+    hasDrawn.current = true
+  }
+
+  const finishDrawing = () => {
+    if (!drawing.current) return
+    drawing.current = false
+    if (hasDrawn.current) {
+      onChange(canvasRef.current.toDataURL('image/png'))
+      hasDrawn.current = false
+    }
+  }
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    context?.clearRect(0, 0, canvas.width, canvas.height)
+    hasDrawn.current = false
+    onChange('')
+  }
+
+  return <div className="field signature-field">
+    <span>Tandatangan</span>
+    {value
+      ? <div className="signature-saved"><img src={value} alt="Tandatangan anda" /><button className="button button-ghost" type="button" onClick={() => onChange('')}>Tandatangan semula</button></div>
+      : <><canvas ref={canvasRef} className="signature-canvas" width="600" height="160" aria-label="Lukis tandatangan di sini" onPointerDown={startDrawing} onPointerMove={draw} onPointerUp={finishDrawing} onPointerCancel={finishDrawing} /><div className="signature-controls"><small>Lukis di atas menggunakan jari atau tetikus.</small><button className="button button-ghost" type="button" onClick={clearSignature}>Kosongkan</button></div></>}
+  </div>
+}
+
 function DesignPanel({ template, setTemplate, accent, setAccent }) {
   return <div className="design-content"><section className="form-section"><div className="section-label"><span>01</span><h2>Pilih template</h2></div><div className="template-list">{templates.map((item) => <button key={item.id} className={`template-option ${template === item.id ? 'selected' : ''}`} onClick={() => setTemplate(item.id)}><span className={`template-swatch ${item.id}`}><FileText size={20} /></span><span><strong>{item.label}</strong><small>{item.description}</small></span>{template === item.id && <Check size={16} className="template-check" />}</button>)}</div></section><section className="form-section"><div className="section-label"><span>02</span><h2>Warna aksen</h2></div><div className="color-grid">{colors.map((color) => <button key={color.value} className={`color-option ${accent === color.value ? 'selected' : ''}`} style={{ '--swatch': color.value }} onClick={() => setAccent(color.value)} title={color.name}><span />{accent === color.value && <Check size={14} />}</button>)}</div><p className="design-tip">Warna akan digunakan pada nama, heading dan elemen utama resume.</p></section></div>
 }
@@ -635,6 +704,7 @@ function ResignationEditorTabs({ resignation, update, template, setTemplate, acc
         <label className="field full-field"><span>Tempoh notis</span><select value={resignation.notice} onChange={(event) => update('notice', event.target.value)}><option value="">Pilih tempoh notis</option><option>24 jam</option><option>7 hari</option><option>14 hari</option><option>30 hari</option><option>60 hari</option><option>Lain-lain</option></select></label>
       </div></section>
       <section className="form-section" id="sec-reason"><div className="section-label"><span>02</span><h2>Alasan ringkas</h2></div><label className="field full-field"><span>Alasan berhenti</span><textarea value={resignation.reason} onChange={(event) => update('reason', event.target.value)} rows="5" /></label></section>
+      <section className="form-section" id="sec-signature"><div className="section-label"><span>03</span><h2>Tandatangan</h2></div><SignatureField value={resignation.signature} onChange={(value) => update('signature', value)} /></section>
     </> : <><section className="form-section"><div className="section-label"><span>01</span><h2>Pilih gaya surat</h2></div><div className="template-list">{resignationTemplates.map((item) => <button key={item.id} className={`template-option ${template === item.id ? 'selected' : ''}`} onClick={() => setTemplate(item.id)}><span className={`letter-style-swatch ${item.id}`}><FilePenLine size={18} /></span><span><strong>{item.label}</strong><small>{item.description}</small></span>{template === item.id && <Check size={16} className="template-check" />}</button>)}</div></section><section className="form-section"><div className="section-label"><span>02</span><h2>Warna aksen</h2></div><div className="color-grid">{colors.map((color) => <button key={color.value} className={`color-option ${accent === color.value ? 'selected' : ''}`} style={{ '--swatch': color.value }} onClick={() => setAccent(color.value)} title={color.name}><span />{accent === color.value && <Check size={14} />}</button>)}</div><p className="design-tip">Warna digunakan pada garis, tajuk dan aksen utama surat resign.</p></section></>}
   </div>
 }
@@ -656,7 +726,7 @@ function LegacyResignationPreview({ resignation }) {
 }
 
 function ResignationPreview({ resignation, template, accent }) {
-  return <article className={`resignation-paper resignation-${template}`} style={{ '--accent': accent }}><div className="letter-top"><span>SURAT LETAK JAWATAN</span><span>{resignation.date}</span></div><div className="letter-content"><p>{resignation.manager}</p><p>{resignation.company}</p><p className="letter-subject">Perkara: Notis peletakan jawatan</p><p>Dengan hormatnya saya, <strong>{resignation.fullName}</strong>, yang memegang jawatan sebagai <strong>{resignation.role}</strong> di {resignation.company}, ingin mengemukakan notis peletakan jawatan saya.</p><p>Peletakan jawatan ini berkuat kuasa dengan tempoh notis <strong>{resignation.notice}</strong>. Hari terakhir saya bekerja adalah pada <strong>{resignation.lastDay}</strong>.</p><p>{resignation.reason}</p><p>Saya bersedia membantu proses serah tugas bagi memastikan peralihan tanggungjawab berjalan dengan lancar.</p><p>Terima kasih atas segala kerjasama dan sokongan yang diberikan.</p><p>Yang benar,</p><div className="signature-space" /><p className="signature-name"><strong>{resignation.fullName}</strong><br />{resignation.role}</p></div><footer className="letter-footer"><span>{resignation.fullName}</span><span>{resignation.company}</span></footer></article>
+  return <article className={`resignation-paper resignation-${template}`} style={{ '--accent': accent }}><div className="letter-top"><span>SURAT LETAK JAWATAN</span><span>{resignation.date}</span></div><div className="letter-content"><p>{resignation.manager}</p><p>{resignation.company}</p><p className="letter-subject">Perkara: Notis peletakan jawatan</p><p>Dengan hormatnya saya, <strong>{resignation.fullName}</strong>, yang memegang jawatan sebagai <strong>{resignation.role}</strong> di {resignation.company}, ingin mengemukakan notis peletakan jawatan saya.</p><p>Peletakan jawatan ini berkuat kuasa dengan tempoh notis <strong>{resignation.notice}</strong>. Hari terakhir saya bekerja adalah pada <strong>{resignation.lastDay}</strong>.</p><p>{resignation.reason}</p><p>Saya bersedia membantu proses serah tugas bagi memastikan peralihan tanggungjawab berjalan dengan lancar.</p><p>Terima kasih atas segala kerjasama dan sokongan yang diberikan.</p><p>Yang benar,</p>{resignation.signature ? <img className="letter-signature" src={resignation.signature} alt="Tandatangan" /> : <div className="signature-space" />}<p className="signature-name"><strong>{resignation.fullName}</strong><br />{resignation.role}</p></div><footer className="letter-footer"><span>{resignation.fullName}</span><span>{resignation.company}</span></footer></article>
 }
 
 function OfferLetterEditor({ offerLetter, update, template, setTemplate, accent, setAccent, activeTab, setActiveTab }) {
@@ -688,6 +758,7 @@ function OfferLetterEditor({ offerLetter, update, template, setTemplate, accent,
       <label className="field full-field"><span>Perenggan utama</span><textarea value={offerLetter.body} onChange={(event) => update('body', event.target.value)} rows="5" /></label>
       <label className="field full-field"><span>Penutup</span><textarea value={offerLetter.closing} onChange={(event) => update('closing', event.target.value)} rows="3" /></label>
     </section>
+    <section className="form-section" id="sec-offer-letter-signature"><div className="section-label"><span>03</span><h2>Tandatangan</h2></div><SignatureField value={offerLetter.signature} onChange={(value) => update('signature', value)} /></section>
     </> : <>
       <section className="form-section"><div className="section-label"><span>01</span><h2>Pilih gaya surat</h2></div><div className="template-list">{resignationTemplates.map((item) => <button key={item.id} className={`template-option ${template === item.id ? 'selected' : ''}`} onClick={() => setTemplate(item.id)}><span className={`letter-style-swatch ${item.id}`}><FilePenLine size={18} /></span><span><strong>{item.label}</strong><small>{item.description}</small></span>{template === item.id && <Check size={16} className="template-check" />}</button>)}</div></section>
       <section className="form-section"><div className="section-label"><span>02</span><h2>Warna aksen</h2></div><div className="color-grid">{colors.map((color) => <button key={color.value} className={`color-option ${accent === color.value ? 'selected' : ''}`} style={{ '--swatch': color.value }} onClick={() => setAccent(color.value)} title={color.name}><span />{accent === color.value && <Check size={14} />}</button>)}</div><p className="design-tip">Warna digunakan pada garis, tajuk dan aksen utama offer letter.</p></section>
@@ -707,7 +778,7 @@ function OfferLetterPreview({ offerLetter, template, accent }) {
       <p>{offerLetter.body}</p>
       <p>{offerLetter.closing}</p>
       <p>Yang benar,</p>
-      <div className="signature-space" />
+      {offerLetter.signature ? <img className="letter-signature" src={offerLetter.signature} alt="Tandatangan" /> : <div className="signature-space" />}
       <p className="signature-name"><strong>{offerLetter.fullName}</strong><br />{offerLetter.role}</p>
     </div>
     <footer className="letter-footer"><span>{offerLetter.fullName}</span><span>{offerLetter.company}</span></footer>
